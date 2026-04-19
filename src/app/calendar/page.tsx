@@ -73,7 +73,6 @@ export default function PublicCalendarPage() {
         </Link>
         <div className="flex-1">
           <h1 className="text-lg font-bold leading-tight">이달의 상담 현황</h1>
-          <p className="text-xs text-charcoal/70">누가 예약했는지는 비공개예요</p>
         </div>
       </header>
 
