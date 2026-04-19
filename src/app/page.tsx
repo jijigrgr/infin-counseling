@@ -14,6 +14,33 @@ interface Reservation {
   slot_time: string;
 }
 
+interface ReservationDetail extends Reservation {
+  concern: string;
+}
+
+function buildGoogleCalendarUrl(r: ReservationDetail): string {
+  const [h, m] = r.slot_time.split(":").map(Number);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const datePart = r.slot_date.replace(/-/g, "");
+  const startT = `${pad(h)}${pad(m)}00`;
+  const endMin = m + 30;
+  const endH = endMin >= 60 ? h + 1 : h;
+  const endM = endMin % 60;
+  const endT = `${pad(endH)}${pad(endM)}00`;
+  const startStr = `${datePart}T${startT}`;
+  const endStr = `${datePart}T${endT}`;
+  const title = `상담 - ${r.student_name} (${r.grade_class})`;
+  const details = `상담 내용: ${r.concern}\n\n인천금융고등학교 웹툰애니메이션과\n김지현 선생님 상담`;
+  const params = new URLSearchParams({
+    action: "TEMPLATE",
+    text: title,
+    dates: `${startStr}/${endStr}`,
+    details,
+    ctz: "Asia/Seoul",
+  });
+  return `https://calendar.google.com/calendar/render?${params.toString()}`;
+}
+
 function getMondayOfCurrentWeek(): string {
   const d = new Date();
   const day = d.getDay();
@@ -63,7 +90,7 @@ export default function HomePage() {
   const [selectedSlot, setSelectedSlot] = useState<{ date: string; time: SlotTime } | null>(null);
   const [formData, setFormData] = useState({ student_name: "", grade_class: "", concern: "" });
   const [submitting, setSubmitting] = useState(false);
-  const [result, setResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [result, setResult] = useState<{ success: boolean; message: string; reservation: ReservationDetail } | null>(null);
   const [error, setError] = useState("");
 
   const fetchReservations = useCallback(async () => {
@@ -124,7 +151,11 @@ export default function HomePage() {
         setError(data.error);
         return;
       }
-      setResult({ success: true, message: data.message });
+      setResult({
+        success: true,
+        message: data.message,
+        reservation: data.reservation,
+      });
       setFormData({ student_name: "", grade_class: "", concern: "" });
       setSelectedSlot(null);
       fetchReservations();
@@ -144,6 +175,14 @@ export default function HomePage() {
           <div className="bg-cream-light rounded-card p-5 mb-6">
             <p className="text-lg font-semibold text-charcoal">{result.message}</p>
           </div>
+          <a
+            href={buildGoogleCalendarUrl(result.reservation)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="w-full h-[52px] rounded-button bg-deep-purple text-white font-semibold text-[15px] shadow-md shadow-deep-purple/20 transition-all duration-200 hover:bg-deep-purple-hover active:scale-[0.97] flex items-center justify-center gap-2 mb-3"
+          >
+            📅 내 구글 캘린더에 추가하기
+          </a>
           <button
             onClick={() => setResult(null)}
             className="w-full h-[52px] rounded-button border-2 border-lavender text-deep-purple font-semibold transition-all duration-200 active:scale-[0.97]"
