@@ -1,8 +1,10 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import Link from "next/link";
 import { format, addDays, parse, isWeekend } from "date-fns";
 import { ko } from "date-fns/locale";
+import { getDefaultDisplayWeekStart } from "@/lib/slots";
 
 type SlotTime = "07:30" | "16:00" | "16:30";
 
@@ -41,14 +43,6 @@ function buildGoogleCalendarUrl(r: ReservationDetail): string {
   return `https://calendar.google.com/calendar/render?${params.toString()}`;
 }
 
-function getMondayOfCurrentWeek(): string {
-  const d = new Date();
-  const day = d.getDay();
-  const diff = day === 0 ? -6 : 1 - day;
-  d.setDate(d.getDate() + diff);
-  return format(d, "yyyy-MM-dd");
-}
-
 function isPastSlot(dateStr: string, time: string): boolean {
   const now = new Date();
   const [h, m] = time.split(":").map(Number);
@@ -84,7 +78,7 @@ function timeLabel(time: string) {
 }
 
 export default function HomePage() {
-  const [weekStart, setWeekStart] = useState(getMondayOfCurrentWeek);
+  const [weekStart, setWeekStart] = useState(() => getDefaultDisplayWeekStart());
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedSlot, setSelectedSlot] = useState<{ date: string; time: SlotTime } | null>(null);
@@ -172,9 +166,13 @@ export default function HomePage() {
         <div className="w-full max-w-sm text-center animate-fade-in-up">
           <div className="text-6xl mb-4 animate-bounce-in">🐱✨</div>
           <h1 className="text-2xl font-bold mb-6">예약 완료!</h1>
-          <div className="bg-cream-light rounded-card p-5 mb-6">
+          <div className="bg-cream-light rounded-card p-5 mb-4">
             <p className="text-lg font-semibold text-charcoal">{result.message}</p>
           </div>
+          <p className="text-xs text-charcoal/60 mb-6 leading-relaxed">
+            사정이 생기면 예약 시간 전까지<br />
+            반톡이나 선생님께 꼭 연락해주세요 🙏
+          </p>
           <a
             href={buildGoogleCalendarUrl(result.reservation)}
             target="_blank"
@@ -202,10 +200,17 @@ export default function HomePage() {
     <div className="min-h-screen bg-snow">
       <header className="bg-lavender/30 px-4 py-3 flex items-center gap-2">
         <span className="text-2xl">🐱</span>
-        <div>
+        <div className="flex-1">
           <h1 className="text-lg font-bold leading-tight">김지현 선생님과 상담 예약</h1>
           <p className="text-xs text-charcoal/70">원하는 시간을 골라주세요!</p>
         </div>
+        <Link
+          href="/calendar"
+          className="text-xs font-medium text-deep-purple bg-white/70 border border-lavender rounded-full px-3 py-1.5 active:scale-95 transition"
+          aria-label="이달의 상담 현황 보기"
+        >
+          📅 이달 현황
+        </Link>
       </header>
 
       <main className="p-4 max-w-lg mx-auto space-y-4 pb-8 animate-fade-in-up">

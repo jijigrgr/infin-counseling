@@ -57,3 +57,15 @@ export function getMondayOfWeek(date: Date): string {
   d.setDate(d.getDate() + diff);
   return format(d, "yyyy-MM-dd");
 }
+
+// 주말(토/일)에는 다음 주 월요일을 보여준다.
+// 평일에는 해당 주 월요일. 금요일 슬롯이 모두 지나도 현재 주 유지(학생이 주말에 다음 주를 바로 보도록 함).
+export function getDefaultDisplayWeekStart(now: Date = new Date()): string {
+  const dow = now.getDay();
+  if (dow === 0 || dow === 6) {
+    const target = new Date(now);
+    target.setDate(now.getDate() + (dow === 0 ? 1 : 2));
+    return format(target, "yyyy-MM-dd");
+  }
+  return getMondayOfWeek(now);
+}

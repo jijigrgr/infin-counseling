@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { format, addDays, parse } from "date-fns";
 import { ko } from "date-fns/locale";
+import { getDefaultDisplayWeekStart } from "@/lib/slots";
 
 interface AdminReservation {
   id: string;
@@ -14,19 +15,11 @@ interface AdminReservation {
   created_at: string;
 }
 
-function getMondayOfCurrentWeek(): string {
-  const d = new Date();
-  const day = d.getDay();
-  const diff = day === 0 ? -6 : 1 - day;
-  d.setDate(d.getDate() + diff);
-  return format(d, "yyyy-MM-dd");
-}
-
 export default function AdminPage() {
   const [password, setPassword] = useState("");
   const [authenticated, setAuthenticated] = useState(false);
   const [authError, setAuthError] = useState("");
-  const [weekStart, setWeekStart] = useState(getMondayOfCurrentWeek);
+  const [weekStart, setWeekStart] = useState(() => getDefaultDisplayWeekStart());
   const [reservations, setReservations] = useState<AdminReservation[]>([]);
   const [loading, setLoading] = useState(false);
   const [actionMsg, setActionMsg] = useState("");
