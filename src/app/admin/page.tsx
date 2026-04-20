@@ -134,7 +134,7 @@ export default function AdminPage() {
     setAnnContent("");
   }
 
-  async function h(id: string, title: string) {
+  async function handleAnnDelete(id: string, title: string) {
     if (!confirm(`"${title}" 공지를 삭제할까요?`)) return;
     setAnnMsg("");
     try {
