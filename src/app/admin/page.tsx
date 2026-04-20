@@ -134,7 +134,7 @@ export default function AdminPage() {
     setAnnContent("");
   }
 
-  async function handleAnnDelete(id: string, title: string) {
+  async function h(id: string, title: string) {
     if (!confirm(`"${title}" 공지를 삭제할까요?`)) return;
     setAnnMsg("");
     try {
@@ -332,7 +332,8 @@ export default function AdminPage() {
                         수정
                       </button>
                       <button
-                        onClick={() => handleAnnDelete(a.id, a.title)}
+                        onClick={() => handleAnnDelete
+                          (a.id, a.title)}
                         className="text-xs font-medium px-2 py-1 rounded-lg border border-coral/30 text-coral hover:bg-coral/5 transition"
                       >
                         삭제
