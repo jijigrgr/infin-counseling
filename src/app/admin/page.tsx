@@ -15,6 +15,14 @@ interface AdminReservation {
   created_at: string;
 }
 
+interface Announcement {
+  id: string;
+  title: string;
+  content: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export default function AdminPage() {
   const [password, setPassword] = useState("");
   const [authenticated, setAuthenticated] = useState(false);
@@ -23,6 +31,12 @@ export default function AdminPage() {
   const [reservations, setReservations] = useState<AdminReservation[]>([]);
   const [loading, setLoading] = useState(false);
   const [actionMsg, setActionMsg] = useState("");
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [annTitle, setAnnTitle] = useState("");
+  const [annContent, setAnnContent] = useState("");
+  const [annSubmitting, setAnnSubmitting] = useState(false);
+  const [annMsg, setAnnMsg] = useState("");
+  const [editingAnnId, setEditingAnnId] = useState<string | null>(null);
 
   const storedPw = typeof window !== "undefined" ? sessionStorage.getItem("admin_pw") : null;
 
@@ -58,6 +72,88 @@ export default function AdminPage() {
   useEffect(() => {
     if (authenticated) fetchReservations();
   }, [authenticated, fetchReservations]);
+
+  const fetchAnnouncements = useCallback(async () => {
+    try {
+      const res = await fetch("/api/announcements");
+      const data = await res.json();
+      setAnnouncements(data.announcements || []);
+    } catch {
+      setAnnouncements([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (authenticated) fetchAnnouncements();
+  }, [authenticated, fetchAnnouncements]);
+
+  async function handleAnnSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!annTitle.trim() || !annContent.trim()) return;
+    setAnnSubmitting(true);
+    setAnnMsg("");
+    try {
+      const url = editingAnnId
+        ? `/api/admin/announcements/${editingAnnId}`
+        : "/api/admin/announcements";
+      const res = await fetch(url, {
+        method: editingAnnId ? "PATCH" : "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-admin-password": password,
+        },
+        body: JSON.stringify({ title: annTitle.trim(), content: annContent.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setAnnMsg(data.error);
+        return;
+      }
+      setAnnMsg(data.message);
+      setAnnTitle("");
+      setAnnContent("");
+      setEditingAnnId(null);
+      fetchAnnouncements();
+    } catch {
+      setAnnMsg("오류가 발생했습니다.");
+    } finally {
+      setAnnSubmitting(false);
+    }
+  }
+
+  function handleAnnEdit(a: Announcement) {
+    setEditingAnnId(a.id);
+    setAnnTitle(a.title);
+    setAnnContent(a.content);
+    setAnnMsg("");
+  }
+
+  function handleAnnCancelEdit() {
+    setEditingAnnId(null);
+    setAnnTitle("");
+    setAnnContent("");
+  }
+
+  async function handleAnnDelete(id: string, title: string) {
+    if (!confirm(`"${title}" 공지를 삭제할까요?`)) return;
+    setAnnMsg("");
+    try {
+      const res = await fetch(`/api/admin/announcements/${id}`, {
+        method: "DELETE",
+        headers: { "x-admin-password": password },
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setAnnMsg(data.error);
+        return;
+      }
+      setAnnMsg("공지가 삭제되었습니다.");
+      if (editingAnnId === id) handleAnnCancelEdit();
+      fetchAnnouncements();
+    } catch {
+      setAnnMsg("오류가 발생했습니다.");
+    }
+  }
 
   function handleLogin(e: React.FormEvent) {
     e.preventDefault();
@@ -160,6 +256,95 @@ export default function AdminPage() {
       </header>
 
       <main className="p-4 max-w-2xl mx-auto space-y-4 pb-8">
+        {/* Announcements */}
+        <section className="bg-white rounded-card p-4 border border-lavender/30 shadow-sm space-y-3">
+          <h2 className="font-semibold text-base flex items-center gap-1.5">
+            📢 공지사항
+          </h2>
+
+          <form onSubmit={handleAnnSubmit} className="space-y-2">
+            <input
+              type="text"
+              value={annTitle}
+              onChange={(e) => setAnnTitle(e.target.value)}
+              placeholder="제목 (예: 4월 25일 출장)"
+              className="w-full h-[44px] px-3 rounded-xl border-2 border-lavender bg-white text-charcoal text-sm focus:border-deep-purple focus:ring-2 focus:ring-deep-purple/20 focus:outline-none"
+            />
+            <textarea
+              value={annContent}
+              onChange={(e) => setAnnContent(e.target.value)}
+              placeholder="내용을 입력해주세요"
+              rows={3}
+              className="w-full px-3 py-2 rounded-xl border-2 border-lavender bg-white text-charcoal text-sm focus:border-deep-purple focus:ring-2 focus:ring-deep-purple/20 focus:outline-none resize-none"
+            />
+            <div className="flex gap-2">
+              <button
+                type="submit"
+                disabled={annSubmitting || !annTitle.trim() || !annContent.trim()}
+                className="flex-1 h-10 bg-deep-purple text-white rounded-button text-sm font-semibold active:scale-[0.97] transition disabled:bg-gray-200 disabled:text-gray-500"
+              >
+                {annSubmitting
+                  ? "저장 중..."
+                  : editingAnnId
+                    ? "수정하기"
+                    : "공지 등록"}
+              </button>
+              {editingAnnId && (
+                <button
+                  type="button"
+                  onClick={handleAnnCancelEdit}
+                  className="h-10 px-4 bg-white border border-lavender rounded-button text-sm font-medium text-deep-purple active:scale-[0.97] transition"
+                >
+                  취소
+                </button>
+              )}
+            </div>
+          </form>
+
+          {annMsg && (
+            <p className="text-xs text-center text-deep-purple bg-lavender/20 rounded-xl px-3 py-2">
+              {annMsg}
+            </p>
+          )}
+
+          {announcements.length > 0 && (
+            <div className="space-y-2 pt-1">
+              {announcements.map((a) => (
+                <div
+                  key={a.id}
+                  className="bg-cream-light rounded-xl px-3 py-2.5 border-l-4 border-peach"
+                >
+                  <div className="flex justify-between items-start gap-2">
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-sm">{a.title}</p>
+                      <p className="text-xs text-charcoal/80 whitespace-pre-wrap mt-0.5">
+                        {a.content}
+                      </p>
+                      <p className="text-[11px] text-charcoal/50 mt-1">
+                        {format(new Date(a.created_at), "M월 d일 HH:mm", { locale: ko })}
+                      </p>
+                    </div>
+                    <div className="flex flex-col gap-1 shrink-0">
+                      <button
+                        onClick={() => handleAnnEdit(a)}
+                        className="text-xs font-medium px-2 py-1 rounded-lg border border-lavender text-deep-purple hover:bg-lavender/20 transition"
+                      >
+                        수정
+                      </button>
+                      <button
+                        onClick={() => handleAnnDelete(a.id, a.title)}
+                        className="text-xs font-medium px-2 py-1 rounded-lg border border-coral/30 text-coral hover:bg-coral/5 transition"
+                      >
+                        삭제
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
         {/* Week Nav */}
         <div className="flex items-center justify-between">
           <button

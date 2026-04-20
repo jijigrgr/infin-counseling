@@ -20,6 +20,13 @@ interface ReservationDetail extends Reservation {
   concern: string;
 }
 
+interface Announcement {
+  id: string;
+  title: string;
+  content: string;
+  created_at: string;
+}
+
 function buildGoogleCalendarUrl(r: ReservationDetail): string {
   const [h, m] = r.slot_time.split(":").map(Number);
   const pad = (n: number) => String(n).padStart(2, "0");
@@ -81,6 +88,7 @@ export default function HomePage() {
   const [weekStart, setWeekStart] = useState(() => getDefaultDisplayWeekStart());
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [loading, setLoading] = useState(true);
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [selectedSlot, setSelectedSlot] = useState<{ date: string; time: SlotTime } | null>(null);
   const [formData, setFormData] = useState({ student_name: "", grade_class: "", concern: "" });
   const [submitting, setSubmitting] = useState(false);
@@ -103,6 +111,13 @@ export default function HomePage() {
   useEffect(() => {
     fetchReservations();
   }, [fetchReservations]);
+
+  useEffect(() => {
+    fetch("/api/announcements")
+      .then((res) => res.json())
+      .then((data) => setAnnouncements(data.announcements || []))
+      .catch(() => setAnnouncements([]));
+  }, []);
 
   const weekDates = Array.from({ length: 5 }, (_, i) => {
     const monday = parse(weekStart, "yyyy-MM-dd", new Date());
@@ -214,6 +229,29 @@ export default function HomePage() {
       </header>
 
       <main className="p-4 max-w-lg mx-auto space-y-4 pb-8 animate-fade-in-up">
+        {/* Announcements */}
+        {announcements.length > 0 && (
+          <section className="space-y-2" aria-label="선생님 공지">
+            {announcements.map((a) => (
+              <div
+                key={a.id}
+                className="bg-cream-light border-l-4 border-peach rounded-card px-4 py-3"
+              >
+                <div className="flex items-center gap-1.5 mb-1">
+                  <span className="text-base">📢</span>
+                  <h2 className="font-semibold text-sm text-charcoal">{a.title}</h2>
+                </div>
+                <p className="text-sm text-charcoal/80 whitespace-pre-wrap leading-relaxed">
+                  {a.content}
+                </p>
+                <p className="text-[11px] text-charcoal/50 mt-1.5">
+                  {format(new Date(a.created_at), "M월 d일", { locale: ko })}
+                </p>
+              </div>
+            ))}
+          </section>
+        )}
+
         {/* Week Navigation */}
         <div className="flex items-center justify-between">
           <button
