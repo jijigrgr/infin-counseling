@@ -63,16 +63,17 @@ export async function DELETE(
   }
 
   const admin = getAdminClient();
-  const { error, count } = await admin
+  const { data, error } = await admin
     .from("announcements")
-    .delete({ count: "exact" })
-    .eq("id", params.id);
+    .delete()
+    .eq("id", params.id)
+    .select("id");
 
   if (error) {
     return NextResponse.json({ error: "잠시 후 다시 시도해주세요." }, { status: 500 });
   }
 
-  if (count === 0) {
+  if (!data || data.length === 0) {
     return NextResponse.json({ error: "해당 공지를 찾을 수 없습니다." }, { status: 404 });
   }
 

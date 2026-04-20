@@ -143,13 +143,13 @@ export default function AdminPage() {
         headers: { "x-admin-password": password },
       });
       const data = await res.json();
+      await fetchAnnouncements();
       if (!res.ok) {
         setAnnMsg(data.error);
         return;
       }
       setAnnMsg("공지가 삭제되었습니다.");
       if (editingAnnId === id) handleAnnCancelEdit();
-      fetchAnnouncements();
     } catch {
       setAnnMsg("오류가 발생했습니다.");
     }
