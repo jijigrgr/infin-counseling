@@ -16,10 +16,5 @@ export function getAdminClient(): SupabaseClient {
       autoRefreshToken: false,
       persistSession: false,
     },
-    global: {
-      headers: {
-        Authorization: `Bearer ${key}`,
-      },
-    },
   });
 }
