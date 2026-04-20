@@ -1,11 +1,11 @@
 -- 공지사항 테이블 (출장/휴강 등 공지)
 CREATE TABLE announcements (
-  id         uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
-  title      text        NOT NULL,
-  content    text        NOT NULL,
-  created_at timestamptz NOT NULL DEFAULT now(),
-  updated_at timestamptz NOT NULL DEFAULT now()
-);
+    id         uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+    title      text        NOT NULL,
+    content    text        NOT NULL,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now()
+  );
 
 CREATE INDEX idx_announcements_created_at ON announcements (created_at DESC);
 
@@ -32,10 +32,10 @@ CREATE POLICY "public_read" ON announcements
 
 -- 관리자만 작성/수정/삭제 (service_role key 사용)
 CREATE POLICY "admin_insert" ON announcements
-  FOR INSERT WITH CHECK (auth.role() = 'service_role');
+  FOR INSERT WITH CHECK ((auth.jwt() ->> 'role') = 'service_role');
 
 CREATE POLICY "admin_update" ON announcements
-  FOR UPDATE USING (auth.role() = 'service_role');
+  FOR UPDATE USING ((auth.jwt() ->> 'role') = 'service_role');
 
 CREATE POLICY "admin_delete" ON announcements
-  FOR DELETE USING (auth.role() = 'service_role');
+  FOR DELETE USING ((auth.jwt() ->> 'role') = 'service_role');
