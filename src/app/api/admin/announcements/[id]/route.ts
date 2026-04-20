@@ -63,6 +63,28 @@ export async function DELETE(
   }
 
   const admin = getAdminClient();
+
+  const { data: existing, error: selectError } = await admin
+    .from("announcements")
+    .select("id, title")
+    .eq("id", params.id)
+    .maybeSingle();
+
+  if (selectError) {
+    return NextResponse.json({
+      error: `조회 실패: ${selectError.message} (code=${selectError.code})`,
+      debug: { paramId: params.id, step: "select" },
+    }, { status: 500 });
+  }
+
+  if (!existing) {
+    const { data: all } = await admin.from("announcements").select("id").limit(5);
+    return NextResponse.json({
+      error: `DB에 없는 ID입니다. paramId=${params.id}`,
+      debug: { paramId: params.id, dbSampleIds: all?.map((r) => r.id) ?? [] },
+    }, { status: 404 });
+  }
+
   const { data, error } = await admin
     .from("announcements")
     .delete()
@@ -70,11 +92,17 @@ export async function DELETE(
     .select("id");
 
   if (error) {
-    return NextResponse.json({ error: "잠시 후 다시 시도해주세요." }, { status: 500 });
+    return NextResponse.json({
+      error: `삭제 실패: ${error.message} (code=${error.code})`,
+      debug: { paramId: params.id, step: "delete" },
+    }, { status: 500 });
   }
 
   if (!data || data.length === 0) {
-    return NextResponse.json({ error: "해당 공지를 찾을 수 없습니다." }, { status: 404 });
+    return NextResponse.json({
+      error: `삭제 0건 (존재했지만 삭제 권한 없음)`,
+      debug: { paramId: params.id, existed: true, deletedCount: 0 },
+    }, { status: 500 });
   }
 
   return NextResponse.json({ message: "공지가 삭제되었습니다." });
