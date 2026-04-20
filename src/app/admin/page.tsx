@@ -145,7 +145,8 @@ export default function AdminPage() {
       const data = await res.json();
       await fetchAnnouncements();
       if (!res.ok) {
-        setAnnMsg(data.error);
+        const debugStr = data.debug ? ` | ${JSON.stringify(data.debug)}` : "";
+        setAnnMsg(`${data.error}${debugStr}`);
         return;
       }
       setAnnMsg("공지가 삭제되었습니다.");
