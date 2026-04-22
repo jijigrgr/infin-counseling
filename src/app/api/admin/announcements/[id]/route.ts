@@ -80,6 +80,16 @@ export async function DELETE(
   if (!existing) {
     const { data: all } = await admin.from("announcements").select("id").limit(5);
     const key = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
+    let jwtInfo = "N/A";
+    if (key.startsWith("eyJ")) {
+      try {
+        const parts = key.split(".");
+        const payload = JSON.parse(Buffer.from(parts[1], "base64").toString());
+        jwtInfo = `ref=${payload.ref ?? "?"} role=${payload.role ?? "?"}`;
+      } catch {
+        jwtInfo = "decode-failed";
+      }
+    }
     return NextResponse.json({
       error: `DB에 없는 ID입니다. paramId=${params.id}`,
       debug: {
@@ -87,6 +97,7 @@ export async function DELETE(
         dbSampleIds: all?.map((r) => r.id) ?? [],
         supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL,
         keyType: key.startsWith("eyJ") ? "JWT(구형)" : key.startsWith("sb_secret") ? "sb_secret(신형)" : `기타(${key.substring(0, 10)})`,
+        jwtInfo,
       },
     }, { status: 404 });
   }
