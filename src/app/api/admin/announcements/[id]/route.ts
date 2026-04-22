@@ -63,55 +63,6 @@ export async function DELETE(
   }
 
   const admin = getAdminClient();
-
-  const { data: existing, error: selectError } = await admin
-    .from("announcements")
-    .select("id, title")
-    .eq("id", params.id)
-    .maybeSingle();
-
-  if (selectError) {
-    return NextResponse.json({
-      error: `조회 실패: ${selectError.message} (code=${selectError.code})`,
-      debug: { paramId: params.id, step: "select" },
-    }, { status: 500 });
-  }
-
-  if (!existing) {
-    const { data: all } = await admin.from("announcements").select("id").limit(5);
-    const key = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
-    let jwtInfo = "N/A";
-    if (key.startsWith("eyJ")) {
-      try {
-        const parts = key.split(".");
-        const payload = JSON.parse(Buffer.from(parts[1], "base64").toString());
-        jwtInfo = `ref=${payload.ref ?? "?"} role=${payload.role ?? "?"}`;
-      } catch {
-        jwtInfo = "decode-failed";
-      }
-    }
-    let rawFetch = "skip";
-    try {
-      const resp = await fetch(`${url}/rest/v1/announcements?select=id&limit=5`, {
-        headers: { apikey: key, Authorization: `Bearer ${key}` },
-      });
-      rawFetch = `${resp.status} ${await resp.text()}`.substring(0, 300);
-    } catch (e) {
-      rawFetch = `err: ${(e as Error).message}`;
-    }
-    return NextResponse.json({
-      error: `DB에 없는 ID입니다. paramId=${params.id}`,
-      debug: {
-        paramId: params.id,
-        dbSampleIds: all?.map((r) => r.id) ?? [],
-        keyType: key.startsWith("eyJ") ? "JWT(구형)" : key.startsWith("sb_secret") ? "sb_secret(신형)" : `기타(${key.substring(0, 10)})`,
-        jwtInfo,
-        rawFetch,
-      },
-    }, { status: 404 });
-  }
-
   const { data, error } = await admin
     .from("announcements")
     .delete()
@@ -119,17 +70,11 @@ export async function DELETE(
     .select("id");
 
   if (error) {
-    return NextResponse.json({
-      error: `삭제 실패: ${error.message} (code=${error.code})`,
-      debug: { paramId: params.id, step: "delete" },
-    }, { status: 500 });
+    return NextResponse.json({ error: "잠시 후 다시 시도해주세요." }, { status: 500 });
   }
 
   if (!data || data.length === 0) {
-    return NextResponse.json({
-      error: `삭제 0건 (존재했지만 삭제 권한 없음)`,
-      debug: { paramId: params.id, existed: true, deletedCount: 0 },
-    }, { status: 500 });
+    return NextResponse.json({ error: "해당 공지를 찾을 수 없습니다." }, { status: 404 });
   }
 
   return NextResponse.json({ message: "공지가 삭제되었습니다." });
