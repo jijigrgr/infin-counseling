@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <?!= include('Style'); ?>
+</head>
+<body>
+  <header class="topbar">
+    <span class="emoji">🐱</span>
+    <div class="title-wrap">
+      <h1>김지현 선생님과 상담 예약</h1>
+      <p class="subtitle">원하는 시간을 골라주세요!</p>
+    </div>
+  </header>
+
+  <main class="container">
+    <!-- 공지사항 -->
+    <section id="announcements" class="anns"></section>
+
+    <!-- 주 이동 -->
+    <div class="week-nav">
+      <button id="prev-week" class="nav-btn" aria-label="이전 주">&lt;</button>
+      <span id="week-label" class="week-label"></span>
+      <button id="next-week" class="nav-btn" aria-label="다음 주">&gt;</button>
+    </div>
+
+    <!-- 캘린더 -->
+    <div id="calendar" class="calendar"></div>
+
+    <!-- 예약 폼 -->
+    <div id="form-section" class="form-section hidden">
+      <h2 id="form-title">예약 정보 입력</h2>
+      <input id="student_name" placeholder="이름" maxlength="20">
+      <input id="grade_class" placeholder="학년/반 (예: 2-3)" maxlength="20">
+      <textarea id="concern" placeholder="상담받고 싶은 내용을 적어주세요" rows="3" maxlength="200"></textarea>
+      <button id="submit-btn" class="primary">예약하기</button>
+      <button id="cancel-btn" class="secondary">취소</button>
+    </div>
+
+    <!-- 결과 -->
+    <div id="result" class="result hidden"></div>
+    <p id="msg" class="msg"></p>
+  </main>
+
+  <script>
+    const TIMES = ['07:30', '16:00', '16:30'];
+    const DAYS = ['월', '화', '수', '목', '금'];
+    let weekStart = getDefaultMonday();
+    let reservations = [];
+    let announcements = [];
+    let selected = null;
+
+    function pad(n) { return String(n).padStart(2, '0'); }
+    function fmt(d) { return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; }
+    function addDays(d, n) { const x = new Date(d); x.setDate(x.getDate()+n); return x; }
+    function parse(s) { return new Date(s + 'T00:00:00'); }
+
+    function getDefaultMonday() {
+      const now = new Date();
+      const dow = now.getDay();
+      if (dow === 0 || dow === 6) {
+        const target = new Date(now);
+        target.setDate(now.getDate() + (dow === 0 ? 1 : 2));
+        return fmt(target);
+      }
+      const d = new Date(now);
+      const diff = dow === 0 ? -6 : 1 - dow;
+      d.setDate(d.getDate() + diff);
+      return fmt(d);
+    }
+
+    function isValidSlot(dateStr, time) {
+      const date = parse(dateStr);
+      const dow = date.getDay();
+      if (dow === 0 || dow === 6) return false;
+      if (time === '07:30') return [1,2,3,4,5].includes(dow);
+      return [2,3,5].includes(dow);
+    }
+
+    function isPastSlot(dateStr, time) {
+      const [h, m] = time.split(':').map(Number);
+      const slotEnd = parse(dateStr);
+      slotEnd.setHours(h, m + 30);
+      return slotEnd < new Date();
+    }
+
+    function getReservation(dateStr, time) {
+      return reservations.find(r => r.slot_date === dateStr && r.slot_time === time);
+    }
+
+    function renderWeekLabel() {
+      const monday = parse(weekStart);
+      const friday = addDays(monday, 4);
+      const lbl = `${monday.getMonth()+1}월 ${monday.getDate()}일 ~ ${friday.getMonth()+1}월 ${friday.getDate()}일`;
+      document.getElementById('week-label').textContent = lbl;
+    }
+
+    function renderCalendar() {
+      const cal = document.getElementById('calendar');
+      const monday = parse(weekStart);
+      let html = '';
+      for (let i = 0; i < 5; i++) {
+        const d = addDays(monday, i);
+        const ds = fmt(d);
+        html += `<div class="day-row"><div class="day-label">${d.getMonth()+1}/${d.getDate()} (${DAYS[i]})</div><div class="slots">`;
+        for (const t of TIMES) {
+          if (!isValidSlot(ds, t)) {
+            html += `<div class="slot disabled">·</div>`;
+            continue;
+          }
+          const r = getReservation(ds, t);
+          const past = isPastSlot(ds, t);
+          if (r) {
+            html += `<div class="slot booked" title="예약됨"><span class="t">${t}</span><span class="b">예약됨</span></div>`;
+          } else if (past) {
+            html += `<div class="slot disabled"><span class="t">${t}</span></div>`;
+          } else {
+            const sel = selected && selected.date === ds && selected.time === t ? ' selected' : '';
+            html += `<div class="slot open${sel}" data-d="${ds}" data-t="${t}"><span class="t">${t}</span><span class="b">예약</span></div>`;
+          }
+        }
+        html += `</div></div>`;
+      }
+      cal.innerHTML = html;
+      cal.querySelectorAll('.slot.open').forEach(el => {
+        el.addEventListener('click', () => {
+          selected = { date: el.dataset.d, time: el.dataset.t };
+          document.getElementById('form-section').classList.remove('hidden');
+          document.getElementById('form-title').textContent = `${el.dataset.d} ${el.dataset.t} 예약`;
+          renderCalendar();
+          document.getElementById('form-section').scrollIntoView({behavior:'smooth'});
+        });
+      });
+    }
+
+    function renderAnnouncements() {
+      const box = document.getElementById('announcements');
+      if (!announcements.length) { box.innerHTML = ''; return; }
+      box.innerHTML = announcements.map(a => `
+        <div class="ann-card">
+          <div class="ann-head"><span>📢</span><b>${escape(a.title)}</b></div>
+          <p>${escape(a.content)}</p>
+        </div>
+      `).join('');
+    }
+
+    function escape(s) {
+      return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+
+    function load() {
+      document.getElementById('msg').textContent = '';
+      google.script.run.withSuccessHandler(data => {
+        reservations = data || [];
+        renderCalendar();
+      }).getReservationsPublic(weekStart);
+      google.script.run.withSuccessHandler(data => {
+        announcements = data || [];
+        renderAnnouncements();
+      }).getAnnouncementsPublic();
+    }
+
+    document.getElementById('prev-week').addEventListener('click', () => {
+      weekStart = fmt(addDays(parse(weekStart), -7));
+      selected = null;
+      document.getElementById('form-section').classList.add('hidden');
+      renderWeekLabel();
+      load();
+    });
+    document.getElementById('next-week').addEventListener('click', () => {
+      weekStart = fmt(addDays(parse(weekStart), 7));
+      selected = null;
+      document.getElementById('form-section').classList.add('hidden');
+      renderWeekLabel();
+      load();
+    });
+
+    document.getElementById('cancel-btn').addEventListener('click', () => {
+      selected = null;
+      document.getElementById('form-section').classList.add('hidden');
+      renderCalendar();
+    });
+
+    document.getElementById('submit-btn').addEventListener('click', () => {
+      if (!selected) return;
+      const name = document.getElementById('student_name').value.trim();
+      const grade = document.getElementById('grade_class').value.trim();
+      const concern = document.getElementById('concern').value.trim();
+      if (!name || !grade || !concern) {
+        document.getElementById('msg').textContent = '모든 항목을 입력해주세요.';
+        return;
+      }
+      document.getElementById('submit-btn').disabled = true;
+      document.getElementById('submit-btn').textContent = '저장 중...';
+      google.script.run.withSuccessHandler(res => {
+        document.getElementById('submit-btn').disabled = false;
+        document.getElementById('submit-btn').textContent = '예약하기';
+        if (res.error) {
+          document.getElementById('msg').textContent = res.error;
+          return;
+        }
+        document.getElementById('form-section').classList.add('hidden');
+        document.getElementById('result').classList.remove('hidden');
+        document.getElementById('result').innerHTML = `
+          <div class="ok">
+            <div class="ok-emoji">🐱✨</div>
+            <h2>예약 완료!</h2>
+            <p class="ok-msg">${escape(res.message)}</p>
+            <p class="ok-sub">사정이 생기면 예약 시간 전까지<br>반톡이나 선생님께 꼭 연락해주세요 🙏</p>
+            <button onclick="location.reload()" class="primary">캘린더로 돌아가기</button>
+          </div>`;
+        document.getElementById('msg').textContent = '';
+        document.getElementById('student_name').value = '';
+        document.getElementById('grade_class').value = '';
+        document.getElementById('concern').value = '';
+        selected = null;
+      }).createReservation({
+        student_name: name,
+        grade_class: grade,
+        slot_date: selected.date,
+        slot_time: selected.time,
+        concern,
+      });
+    });
+
+    renderWeekLabel();
+    load();
+  </script>
+</body>
+</html>

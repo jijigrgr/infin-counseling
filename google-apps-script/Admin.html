@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <?!= include('Style'); ?>
+</head>
+<body>
+  <!-- 로그인 -->
+  <div id="login-section" class="login">
+    <div class="login-box">
+      <div class="lock">🔒</div>
+      <h1>관리자 로그인</h1>
+      <input id="pw-input" type="password" placeholder="비밀번호를 입력하세요">
+      <button id="login-btn" class="primary">로그인</button>
+      <p id="login-msg" class="msg"></p>
+    </div>
+  </div>
+
+  <!-- 관리자 화면 -->
+  <div id="admin-section" class="hidden">
+    <header class="topbar">
+      <span class="emoji">🔒</span>
+      <h1>관리자 페이지</h1>
+      <button id="logout-btn" class="logout">로그아웃</button>
+    </header>
+
+    <main class="container">
+      <!-- 공지 등록/수정 -->
+      <section class="card">
+        <h2>📢 공지사항</h2>
+        <input id="ann-title" placeholder="제목 (예: 4월 25일 출장)" maxlength="50">
+        <textarea id="ann-content" placeholder="내용을 입력해주세요" rows="3" maxlength="200"></textarea>
+        <div class="row">
+          <button id="ann-submit" class="primary">공지 등록</button>
+          <button id="ann-cancel" class="secondary hidden">취소</button>
+        </div>
+        <p id="ann-msg" class="msg"></p>
+        <div id="ann-list" class="ann-list"></div>
+      </section>
+
+      <!-- 주 이동 -->
+      <div class="week-nav">
+        <button id="prev-week" class="nav-btn" aria-label="이전 주">&lt;</button>
+        <span id="week-label" class="week-label"></span>
+        <button id="next-week" class="nav-btn" aria-label="다음 주">&gt;</button>
+      </div>
+
+      <div class="row">
+        <button id="export-btn" class="mint">엑셀 다운로드</button>
+        <button id="refresh-btn" class="secondary">새로고침</button>
+      </div>
+      <p id="act-msg" class="msg"></p>
+
+      <!-- 예약 목록 -->
+      <div id="res-list" class="res-list"></div>
+      <p id="total" class="total"></p>
+    </main>
+  </div>
+
+  <script>
+    const DAYS = ['일','월','화','수','목','금','토'];
+    let pw = '';
+    let weekStart = getDefaultMonday();
+    let editingAnnId = null;
+
+    function pad(n){return String(n).padStart(2,'0')}
+    function fmt(d){return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`}
+    function addDays(d,n){const x=new Date(d);x.setDate(x.getDate()+n);return x}
+    function parse(s){return new Date(s+'T00:00:00')}
+    function escape(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+
+    function getDefaultMonday(){
+      const now=new Date();const dow=now.getDay();
+      if(dow===0||dow===6){const t=new Date(now);t.setDate(now.getDate()+(dow===0?1:2));return fmt(t)}
+      const d=new Date(now);const diff=dow===0?-6:1-dow;d.setDate(d.getDate()+diff);return fmt(d);
+    }
+
+    function showAdmin(){
+      document.getElementById('login-section').classList.add('hidden');
+      document.getElementById('admin-section').classList.remove('hidden');
+      sessionStorage.setItem('admin_pw', pw);
+      loadAll();
+    }
+
+    document.getElementById('login-btn').addEventListener('click', () => {
+      pw = document.getElementById('pw-input').value;
+      if (!pw) return;
+      document.getElementById('login-msg').textContent = '확인 중...';
+      google.script.run.withSuccessHandler(res => {
+        if (res.error) {
+          document.getElementById('login-msg').textContent = res.error;
+          pw = '';
+        } else {
+          document.getElementById('login-msg').textContent = '';
+          showAdmin();
+        }
+      }).adminGetReservations(pw, weekStart);
+    });
+
+    document.getElementById('pw-input').addEventListener('keypress', e => {
+      if (e.key === 'Enter') document.getElementById('login-btn').click();
+    });
+
+    document.getElementById('logout-btn').addEventListener('click', () => {
+      pw = '';
+      sessionStorage.removeItem('admin_pw');
+      location.reload();
+    });
+
+    function renderWeekLabel(){
+      const m=parse(weekStart);const f=addDays(m,4);
+      document.getElementById('week-label').textContent = `${m.getMonth()+1}월 ${m.getDate()}일 ~ ${f.getMonth()+1}월 ${f.getDate()}일`;
+    }
+
+    function loadAll(){
+      renderWeekLabel();
+      loadReservations();
+      loadAnnouncements();
+    }
+
+    function loadReservations(){
+      document.getElementById('res-list').innerHTML = '<p class="loading">불러오는 중...</p>';
+      google.script.run.withSuccessHandler(res => {
+        if (res.error){ document.getElementById('act-msg').textContent = res.error; return; }
+        const list = res.reservations || [];
+        if (!list.length){
+          document.getElementById('res-list').innerHTML = '<div class="empty">📋<br>이번 주 예약이 없습니다</div>';
+          document.getElementById('total').textContent = '';
+          return;
+        }
+        list.sort((a,b) => (a.slot_date+a.slot_time).localeCompare(b.slot_date+b.slot_time));
+        document.getElementById('res-list').innerHTML = list.map(r => {
+          const d = parse(r.slot_date);
+          const label = `${d.getMonth()+1}/${d.getDate()} (${DAYS[d.getDay()]})`;
+          return `
+            <div class="res-card">
+              <div class="res-info">
+                <div class="res-name">
+                  <b>${escape(r.student_name)}</b>
+                  <span class="badge">${escape(r.grade_class)}</span>
+                </div>
+                <p class="res-time">${label} ${escape(r.slot_time)}</p>
+                <p class="res-concern">${escape(r.concern)}</p>
+              </div>
+              <button class="cancel-btn" data-id="${r.id}" data-name="${escape(r.student_name)}">취소</button>
+            </div>`;
+        }).join('');
+        document.getElementById('total').textContent = `총 ${list.length}건의 예약`;
+        document.querySelectorAll('.cancel-btn').forEach(b => {
+          b.addEventListener('click', () => {
+            if (!confirm(`${b.dataset.name} 학생의 예약을 취소할까요?`)) return;
+            google.script.run.withSuccessHandler(r2 => {
+              if (r2.error) document.getElementById('act-msg').textContent = r2.error;
+              else { document.getElementById('act-msg').textContent = r2.message; loadReservations(); }
+            }).adminCancelReservation(pw, b.dataset.id);
+          });
+        });
+      }).adminGetReservations(pw, weekStart);
+    }
+
+    function loadAnnouncements(){
+      google.script.run.withSuccessHandler(list => {
+        if (!list || !list.length){ document.getElementById('ann-list').innerHTML = ''; return; }
+        document.getElementById('ann-list').innerHTML = list.map(a => `
+          <div class="ann-card">
+            <div class="ann-row">
+              <div class="ann-text">
+                <b>${escape(a.title)}</b>
+                <p>${escape(a.content)}</p>
+              </div>
+              <div class="ann-actions">
+                <button class="ann-edit-btn" data-id="${a.id}" data-title="${escape(a.title)}" data-content="${escape(a.content)}">수정</button>
+                <button class="ann-del-btn" data-id="${a.id}" data-title="${escape(a.title)}">삭제</button>
+              </div>
+            </div>
+          </div>`).join('');
+        document.querySelectorAll('.ann-edit-btn').forEach(b => {
+          b.addEventListener('click', () => {
+            editingAnnId = b.dataset.id;
+            document.getElementById('ann-title').value = b.dataset.title;
+            document.getElementById('ann-content').value = b.dataset.content;
+            document.getElementById('ann-submit').textContent = '수정하기';
+            document.getElementById('ann-cancel').classList.remove('hidden');
+          });
+        });
+        document.querySelectorAll('.ann-del-btn').forEach(b => {
+          b.addEventListener('click', () => {
+            if (!confirm(`"${b.dataset.title}" 공지를 삭제할까요?`)) return;
+            google.script.run.withSuccessHandler(r => {
+              if (r.error) document.getElementById('ann-msg').textContent = r.error;
+              else { document.getElementById('ann-msg').textContent = r.message; loadAnnouncements(); }
+            }).adminDeleteAnnouncement(pw, b.dataset.id);
+          });
+        });
+      }).getAnnouncementsPublic();
+    }
+
+    document.getElementById('ann-submit').addEventListener('click', () => {
+      const title = document.getElementById('ann-title').value.trim();
+      const content = document.getElementById('ann-content').value.trim();
+      if (!title || !content) return;
+      document.getElementById('ann-submit').disabled = true;
+      const cb = res => {
+        document.getElementById('ann-submit').disabled = false;
+        if (res.error) { document.getElementById('ann-msg').textContent = res.error; return; }
+        document.getElementById('ann-msg').textContent = res.message;
+        document.getElementById('ann-title').value = '';
+        document.getElementById('ann-content').value = '';
+        editingAnnId = null;
+        document.getElementById('ann-submit').textContent = '공지 등록';
+        document.getElementById('ann-cancel').classList.add('hidden');
+        loadAnnouncements();
+      };
+      if (editingAnnId) google.script.run.withSuccessHandler(cb).adminUpdateAnnouncement(pw, editingAnnId, title, content);
+      else google.script.run.withSuccessHandler(cb).adminCreateAnnouncement(pw, title, content);
+    });
+
+    document.getElementById('ann-cancel').addEventListener('click', () => {
+      editingAnnId = null;
+      document.getElementById('ann-title').value = '';
+      document.getElementById('ann-content').value = '';
+      document.getElementById('ann-submit').textContent = '공지 등록';
+      document.getElementById('ann-cancel').classList.add('hidden');
+    });
+
+    document.getElementById('prev-week').addEventListener('click', () => {
+      weekStart = fmt(addDays(parse(weekStart), -7)); loadAll();
+    });
+    document.getElementById('next-week').addEventListener('click', () => {
+      weekStart = fmt(addDays(parse(weekStart), 7)); loadAll();
+    });
+    document.getElementById('refresh-btn').addEventListener('click', loadReservations);
+
+    document.getElementById('export-btn').addEventListener('click', () => {
+      document.getElementById('act-msg').textContent = '엑셀 생성 중...';
+      google.script.run.withSuccessHandler(res => {
+        if (res.error) { document.getElementById('act-msg').textContent = res.error; return; }
+        // CSV 형식으로 다운로드 (엑셀에서 열 수 있음)
+        const csv = res.rows.map(row => row.map(cell => {
+          const s = String(cell).replace(/"/g, '""');
+          return /[",\n]/.test(s) ? `"${s}"` : s;
+        }).join(',')).join('\n');
+        const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `reservations_${weekStart}.csv`;
+        a.click();
+        URL.revokeObjectURL(url);
+        document.getElementById('act-msg').textContent = '다운로드 완료';
+      }).adminExportReservations(pw, weekStart);
+    });
+
+    // 세션 자동 로그인
+    const stored = sessionStorage.getItem('admin_pw');
+    if (stored) {
+      pw = stored;
+      google.script.run.withSuccessHandler(res => {
+        if (res.error) { sessionStorage.removeItem('admin_pw'); pw = ''; }
+        else showAdmin();
+      }).adminGetReservations(pw, weekStart);
+    }
+  </script>
+</body>
+</html>
